@@ -1,6 +1,8 @@
 from flask import Flask, render_template_string
-import requests
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
+import time
 
 app = Flask(__name__)
 
@@ -9,7 +11,7 @@ HTML_TEMPLATE = '''
 <html>
 <head>
     <title>Golden Result Tracker</title>
-    <meta http-equiv="refresh" content="10" />
+    <meta http-equiv="refresh" content="15" />
     <style>
         body { font-family: Arial; background: #111; color: #0f0; text-align: center; padding-top: 30px; }
         .result { font-size: 20px; margin: 10px 0; }
@@ -25,25 +27,31 @@ HTML_TEMPLATE = '''
 '''
 
 def fetch_results():
-    url = "https://mob.gnclott.com/QuickLink/ResultChart.aspx"
     try:
-        response = requests.get(url, timeout=5)
-        soup = BeautifulSoup(response.text, "html.parser")
-        table = soup.find("table")
-        rows = table.find_all("tr")
-        last = rows[-1]
-        cols = last.find_all("td")
-        if len(cols) < 5:
-            return {"Error": "Unexpected format"}
-        return {
-            "Draw Time": cols[0].text.strip(),
-            "Navratna": cols[1].text.strip(),
-            "Rajarani": cols[2].text.strip(),
-            "Royal": cols[3].text.strip(),
-            "Golden": cols[4].text.strip(),
-        }
-    except:
-        return {"Error": "Could not fetch result"}
+        options = Options()
+        options.add_argument("--headless")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+
+        driver = webdriver.Chrome(options=options)
+        driver.get("https://www.goldennavratnacoupon.com/results")
+        time.sleep(5)
+
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        driver.quit()
+
+        results = {}
+        blocks = soup.find_all("div", class_="card-result")
+        for block in blocks:
+            game_name = block.find("h3")
+            game_result = block.find("b") or block.find("span", class_="number")
+            if game_name and game_result:
+                results[game_name.text.strip()] = game_result.text.strip()
+
+        return results if results else {"Error": "No results found"}
+
+    except Exception as e:
+        return {"Error": str(e)}
 
 @app.route("/")
 def index():
@@ -52,4 +60,4 @@ def index():
 
 if __name__ == "__main__":
     app.run()
-  
+    
